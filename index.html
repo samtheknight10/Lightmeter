@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0a0a0a">
+    <meta name="description" content="Professional light meter for photography with spot metering">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Light Meter Pro</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&family=Space+Mono:wght@400;700&display=swap');
+        
+        :root {
+            --bg-dark: #0a0a0a;
+            --bg-panel: #141414;
+            --text-primary: #f5f5f5;
+            --text-secondary: #888;
+            --accent: #00ff88;
+            --accent-dim: #00ff8844;
+            --warning: #ff3366;
+            --grid: #222;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        body {
+            font-family: 'JetBrains Mono', monospace;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            position: fixed;
+        }
+        
+        #camera-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            z-index: 1;
+        }
+        
+        #camera {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        #spot-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80px;
+            height: 80px;
+            border: 2px solid var(--accent);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 3;
+            animation: pulse 2s ease-in-out infinite;
+            box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.3),
+                        inset 0 0 0 2px rgba(0, 0, 0, 0.3);
+        }
+        
+        #spot-indicator::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 4px;
+            height: 4px;
+            background: var(--accent);
+            border-radius: 50%;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 0.6; transform: translate(-50%, -50%) scale(1); }
+            50% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
+        }
+        
+        #ui-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none;
+        }
+        
+        .ui-element {
+            pointer-events: auto;
+        }
+        
+        /* Top Bar */
+        #top-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 20px;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+        
+        #app-title {
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+        }
+        
+        #iso-selector {
+            background: rgba(20, 20, 20, 0.95);
+            border: 1px solid var(--grid);
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            color: var(--text-primary);
+            font-weight: 600;
+            outline: none;
+            backdrop-filter: blur(10px);
+            cursor: pointer;
+        }
+        
+        /* Main Reading Display */
+        #reading-display {
+            position: absolute;
+            bottom: 120px;
+            left: 0;
+            right: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        #ev-value {
+            font-family: 'Space Mono', monospace;
+            font-size: 72px;
+            font-weight: 700;
+            color: var(--accent);
+            text-shadow: 0 0 20px var(--accent-dim),
+                         0 2px 4px rgba(0,0,0,0.5);
+            letter-spacing: -2px;
+            line-height: 1;
+        }
+        
+        #ev-label {
+            font-size: 10px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+        
+        /* Settings Panel */
+        #settings-panel {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(20, 20, 20, 0.98);
+            border-top: 1px solid var(--grid);
+            padding: 24px 20px 32px;
+            backdrop-filter: blur(20px);
+        }
+        
+        .settings-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        
+        .settings-row:last-child {
+            margin-bottom: 0;
+        }
+        
+        .setting-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+        
+        .setting-value {
+            font-family: 'Space Mono', monospace;
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+        
+        /* Error/Permission States */
+        #permission-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg-dark);
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            text-align: center;
+        }
+        
+        #permission-screen.hidden {
+            display: none;
+        }
+        
+        .permission-icon {
+            font-size: 64px;
+            margin-bottom: 24px;
+            opacity: 0.3;
+        }
+        
+        .permission-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+        
+        .permission-text {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            max-width: 300px;
+            margin-bottom: 32px;
+        }
+        
+        .btn-primary {
+            background: var(--accent);
+            color: var(--bg-dark);
+            border: none;
+            padding: 14px 32px;
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-primary:active {
+            transform: scale(0.95);
+        }
+        
+        /* Canvas for analysis */
+        #analysis-canvas {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="permission-screen">
+        <div class="permission-icon">📷</div>
+        <div class="permission-title">Camera Access Required</div>
+        <div class="permission-text">
+            This light meter needs access to your camera to measure light levels for proper exposure.
+        </div>
+        <button class="btn-primary ui-element" onclick="requestCameraAccess()">Enable Camera</button>
+    </div>
+
+    <div id="camera-container">
+        <video id="camera" autoplay playsinline></video>
+        <div id="spot-indicator"></div>
+    </div>
+
+    <div id="ui-overlay">
+        <div id="top-bar" class="ui-element">
+            <div id="app-title">Light Meter</div>
+            <select id="iso-selector" class="ui-element">
+                <option value="100">ISO 100</option>
+                <option value="200">ISO 200</option>
+                <option value="400">ISO 400</option>
+                <option value="800">ISO 800</option>
+                <option value="1600">ISO 1600</option>
+                <option value="3200">ISO 3200</option>
+                <option value="6400">ISO 6400</option>
+            </select>
+        </div>
+
+        <div id="reading-display" class="ui-element">
+            <div id="ev-label">Exposure Value</div>
+            <div id="ev-value">--</div>
+        </div>
+
+        <div id="settings-panel" class="ui-element">
+            <div class="settings-row">
+                <span class="setting-label">Aperture</span>
+                <span class="setting-value" id="aperture-value">f/--</span>
+            </div>
+            <div class="settings-row">
+                <span class="setting-label">Shutter</span>
+                <span class="setting-value" id="shutter-value">--</span>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="analysis-canvas"></canvas>
+
+    <script src="app.js"></script>
+    <script>
+        // Register service worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js')
+                .then(reg => console.log('Service Worker registered'))
+                .catch(err => console.log('Service Worker registration failed'));
+        }
+    </script>
+</body>
+</html>
