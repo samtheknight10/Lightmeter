@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#1a1f2e">
+    <meta name="description" content="Professional light meter for photography with spot metering">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="screen-orientation" content="portrait">
+    <title>Light Meter Pro</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="apple-touch-icon" sizes="512x512" href="icon-512.png">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&family=Space+Mono:wght@400;700&display=swap');
+        
+        :root {
+            --bg-dark: #1a1f2e;
+            --bg-panel: #232936;
+            --text-primary: #e8e4d9;
+            --text-secondary: #8a93a8;
+            --accent: #d4cfc0;
+            --accent-bright: #f5f1e8;
+            --accent-dim: #d4cfc044;
+            --warning: #ff3366;
+            --grid: #2d3546;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        body {
+            font-family: 'JetBrains Mono', 'Courier New', 'Monaco', 'Consolas', monospace;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            position: fixed;
+        }
+        
+        #camera-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            z-index: 1;
+        }
+        
+        #camera {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        /* Live Preview Window */
+        #live-preview {
+            position: absolute;
+            top: 50px;
+            right: 12px;
+            width: 90px;
+            height: 90px;
+            border: 2px solid var(--accent);
+            border-radius: 8px;
+            overflow: hidden;
+            background: #000;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5),
+                        0 0 0 1px rgba(0, 0, 0, 0.3);
+            z-index: 4;
+        }
+        
+        #preview-canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        #preview-label {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.9), transparent);
+            color: var(--accent);
+            font-size: 7px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 4px;
+            text-align: center;
+            font-weight: 600;
+        }
+        
+        /* Meter Button */
+        #meter-button-container {
+            position: absolute;
+            bottom: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 5;
+        }
+        
+        #meter-button {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--accent);
+            color: var(--bg-dark);
+            border: none;
+            padding: 12px 24px;
+            border-radius: 40px;
+            font-family: 'JetBrains Mono', 'Courier New', monospace;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            cursor: pointer;
+            box-shadow: 0 3px 15px rgba(212, 207, 192, 0.3),
+                        0 2px 4px rgba(0, 0, 0, 0.2);
+            transition: all 0.2s;
+            backdrop-filter: blur(10px);
+        }
+        
+        #meter-button:active {
+            transform: scale(0.95);
+        }
+        
+        #meter-button.frozen {
+            background: var(--accent-bright);
+            box-shadow: 0 3px 15px rgba(245, 241, 232, 0.4),
+                        0 2px 4px rgba(0, 0, 0, 0.3);
+            animation: frozen-pulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes frozen-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.85; }
+        }
+        
+        #meter-button svg {
+            width: 16px;
+            height: 16px;
+        }
+        
+        #spot-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60px;
+            height: 60px;
+            border: 2px solid var(--accent);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 3;
+            animation: pulse 2s ease-in-out infinite;
+            box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.3),
+                        inset 0 0 0 2px rgba(0, 0, 0, 0.3);
+            transition: opacity 0.3s ease;
+        }
+        
+        #spot-indicator.ambient-mode {
+            opacity: 0.3;
+            width: 150px;
+            height: 150px;
+            border-style: dashed;
+        }
+        
+        #spot-indicator::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 3px;
+            height: 3px;
+            background: var(--accent);
+            border-radius: 50%;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 0.6; transform: translate(-50%, -50%) scale(1); }
+            50% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
+        }
+        
+        #ui-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none;
+        }
+        
+        .ui-element {
+            pointer-events: auto;
+        }
+        
+        /* Top Bar */
+        #top-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 12px 16px;
+            background: linear-gradient(to bottom, rgba(26,31,46,0.95), transparent);
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+        
+        #app-title {
+            font-size: 9px;
+            font-weight: 600;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+        }
+        
+        #iso-selector, #metering-mode {
+            background: rgba(35, 41, 54, 0.95);
+            border: 1px solid var(--grid);
+            border-radius: 4px;
+            padding: 6px 10px;
+            font-family: 'JetBrains Mono', 'Courier New', 'Monaco', 'Consolas', monospace;
+            font-size: 11px;
+            color: var(--text-primary);
+            font-weight: 600;
+            outline: none;
+            backdrop-filter: blur(10px);
+            cursor: pointer;
+        }
+        
+        /* Main Reading Display */
+        #reading-display {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            pointer-events: none;
+            opacity: 1;
+            transition: opacity 0.3s ease;
+        }
+        
+        #reading-display.show {
+            opacity: 1;
+        }
+        
+        #ev-value {
+            font-family: 'Space Mono', 'Courier New', 'Monaco', 'Consolas', monospace;
+            font-size: 48px;
+            font-weight: 700;
+            color: var(--accent);
+            text-shadow: 0 0 15px var(--accent-dim),
+                         0 2px 4px rgba(0,0,0,0.5);
+            letter-spacing: -1px;
+            line-height: 1;
+        }
+        
+        #ev-label {
+            font-size: 8px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+        
+        /* Exposure Sidebar */
+        #exposure-sidebar {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            opacity: 1;
+            transition: opacity 0.3s ease;
+        }
+        
+        #exposure-sidebar.show {
+            opacity: 1;
+        }
+        
+        .combination-item {
+            background: rgba(35, 41, 54, 0.85);
+            border: 1px solid var(--grid);
+            border-radius: 4px;
+            padding: 6px 8px;
+            min-width: 70px;
+            backdrop-filter: blur(10px);
+            text-align: right;
+        }
+        
+        .combination-item.suggested {
+            border-color: var(--accent);
+            background: rgba(212, 207, 192, 0.1);
+        }
+        
+        .combination-aperture {
+            font-family: 'Space Mono', 'Courier New', monospace;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 2px;
+        }
+        
+        .combination-item.suggested .combination-aperture {
+            color: var(--accent);
+        }
+        
+        .combination-shutter {
+            font-family: 'Space Mono', 'Courier New', monospace;
+            font-size: 9px;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+        
+        .combination-item.suggested .combination-shutter {
+            color: var(--accent);
+        }
+        
+        
+        /* Settings Panel */
+        #settings-panel {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(35, 41, 54, 0.98);
+            border-top: 1px solid var(--grid);
+            padding: 16px 16px 20px;
+            backdrop-filter: blur(20px);
+            transform: translateY(0);
+            transition: transform 0.3s ease;
+        }
+        
+        #settings-panel.show {
+            transform: translateY(0);
+        }
+        
+        .settings-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .settings-row:last-child {
+            margin-bottom: 0;
+        }
+        
+        .setting-label {
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+        
+        .setting-value {
+            font-family: 'Space Mono', 'Courier New', 'Monaco', 'Consolas', monospace;
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+        
+        /* Error/Permission States */
+        #permission-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg-dark);
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            text-align: center;
+        }
+        
+        #permission-screen.hidden {
+            display: none;
+        }
+        
+        .permission-icon {
+            font-size: 64px;
+            margin-bottom: 24px;
+            opacity: 0.3;
+        }
+        
+        .permission-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+        
+        .permission-text {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            max-width: 300px;
+            margin-bottom: 32px;
+        }
+        
+        .btn-primary {
+            background: var(--accent);
+            color: var(--bg-dark);
+            border: none;
+            padding: 14px 32px;
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', 'Courier New', 'Monaco', 'Consolas', monospace;
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-primary:active {
+            transform: scale(0.95);
+        }
+        
+        /* Canvas for analysis */
+        #analysis-canvas {
+            display: none;
+        }
+        
+        /* Offline indicator */
+        #offline-indicator {
+            position: fixed;
+            top: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 51, 102, 0.95);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 16px;
+            font-size: 9px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            z-index: 100;
+            display: none;
+            backdrop-filter: blur(10px);
+        }
+        
+        #offline-indicator.show {
+            display: block;
+            animation: slideDown 0.3s ease-out;
+        }
+        
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="offline-indicator">Offline Mode</div>
+    
+    <div id="permission-screen">
+        <div class="permission-icon">📷</div>
+        <div class="permission-title">Camera Access Required</div>
+        <div class="permission-text">
+            This light meter needs access to your camera to measure light levels for proper exposure.
+        </div>
+        <button class="btn-primary ui-element" onclick="requestCameraAccess()">Enable Camera</button>
+    </div>
+
+    <div id="camera-container">
+        <video id="camera" autoplay playsinline></video>
+        <div id="spot-indicator"></div>
+        
+        <!-- Live Preview Window -->
+        <div id="live-preview">
+            <canvas id="preview-canvas"></canvas>
+            <div id="preview-label">Live Preview</div>
+        </div>
+        
+        <!-- Meter Button -->
+        <div id="meter-button-container" class="ui-element">
+            <button id="meter-button" class="ui-element">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <circle cx="12" cy="12" r="3" fill="currentColor"/>
+                </svg>
+                <span id="meter-button-text">Meter</span>
+            </button>
+        </div>
+    </div>
+
+    <div id="ui-overlay">
+        <div id="top-bar" class="ui-element">
+            <div id="app-title">Light Meter</div>
+            <div style="display: flex; gap: 12px; align-items: center;">
+                <select id="metering-mode" class="ui-element">
+                    <option value="spot">Spot</option>
+                    <option value="ambient">Ambient</option>
+                </select>
+                <select id="iso-selector" class="ui-element">
+                    <option value="100">ISO 100</option>
+                    <option value="200">ISO 200</option>
+                    <option value="400">ISO 400</option>
+                    <option value="800">ISO 800</option>
+                    <option value="1600">ISO 1600</option>
+                    <option value="3200">ISO 3200</option>
+                    <option value="6400">ISO 6400</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="reading-display" class="ui-element">
+            <div id="ev-label">Exposure Value</div>
+            <div id="ev-value">--</div>
+        </div>
+
+        <div id="exposure-sidebar" class="ui-element">
+            <!-- Combinations will be populated by JavaScript -->
+        </div>
+
+        <div id="settings-panel" class="ui-element">
+            <div class="settings-row">
+                <span class="setting-label">Aperture</span>
+                <span class="setting-value" id="aperture-value">f/--</span>
+            </div>
+            <div class="settings-row">
+                <span class="setting-label">Shutter</span>
+                <span class="setting-value" id="shutter-value">--</span>
+            </div>
+            <div class="settings-row" style="border-top: 1px solid var(--grid); margin-top: 10px; padding-top: 10px;">
+                <a href="calibration.html" style="color: var(--text-secondary); font-size: 9px; text-decoration: none; text-transform: uppercase; letter-spacing: 1px;">
+                    ⚙️ Calibration Guide
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="analysis-canvas"></canvas>
+
+    <script src="app.js"></script>
+    <script>
+        // Register service worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js')
+                .then(reg => console.log('Service Worker registered'))
+                .catch(err => console.log('Service Worker registration failed'));
+        }
+    </script>
+</body>
+</html>
